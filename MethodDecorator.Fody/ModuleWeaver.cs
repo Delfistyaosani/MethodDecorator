@@ -9,22 +9,23 @@ using Mono.Cecil;
 using MethodDecorator.Fody.Interfaces;
 using System.Text.RegularExpressions;
 using Mono.Collections.Generic;
+using Fody;
 
-public class ModuleWeaver {
-    public ModuleDefinition ModuleDefinition { get; set; }
-    public IAssemblyResolver AssemblyResolver { get; set; }
-    public Action<string> LogInfo { get; set; }
-    public Action<string> LogWarning { get; set; }
-    public Action<string> LogError { get; set; }
+public class ModuleWeaver : BaseModuleWeaver
+{
+    public ModuleWeaver()
+        : base()
+    {
 
+    }
 
-    public void Execute() {
+    public override void Execute() {
         this.LogInfo = s => { };
         this.LogWarning = s => { };
 
         var decorator = new MethodDecorator.Fody.MethodDecorator(this.ModuleDefinition);
 
-        foreach (var x in this.ModuleDefinition.AssemblyReferences) AssemblyResolver.Resolve(x);
+        foreach (var x in this.ModuleDefinition.AssemblyReferences) ResolveAssembly(x.FullName);
 
         this.DecorateAttributedByImplication(decorator);
 		this.DecorateByType(decorator);
@@ -90,7 +91,7 @@ public class ModuleWeaver {
 		}
 	}
 
-	private IEnumerable<AspectRule> FindByMarkerType(
+    private IEnumerable<AspectRule> FindByMarkerType(
 		IEnumerable<TypeDefinition> markerTypeDefinitions,
 		Collection<CustomAttribute> customAttributes)
 	{
@@ -282,6 +283,16 @@ public class ModuleWeaver {
 
         foreach (var t in allNestedTypes)
             yield return t;
+    }
+
+    public override IEnumerable<string> GetAssembliesForScanning()
+    {
+        yield return "mscorlib";
+        yield return "System";
+        yield return "netstandard";
+        yield return "System.Diagnostics.Tools";
+        yield return "System.Diagnostics.Debug";
+        yield return "System.Runtime";
     }
 
     private class HostAttributeMapping {

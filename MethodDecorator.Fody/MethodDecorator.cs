@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 
 namespace MethodDecorator.Fody {
-    public class MethodDecorator {
+    public class MethodDecorator
+    {
         private readonly ReferenceFinder _referenceFinder;
 
         public MethodDecorator(ModuleDefinition moduleDefinition) {
