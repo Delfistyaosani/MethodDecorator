@@ -23,9 +23,10 @@ namespace MethodDecorator.Fody {
             var parameterTypeRef = this._referenceFinder.GetTypeReference(typeof(object));
             var parametersArrayTypeRef = new ArrayType(parameterTypeRef);
 
-            var methodVariableDefinition = AddVariableDefinition(method, "__fody$method", methodBaseTypeRef);
-            var attributeVariableDefinition = AddVariableDefinition(method, "__fody$attribute", attribute.AttributeType);
-            var exceptionVariableDefinition = AddVariableDefinition(method, "__fody$exception", exceptionTypeRef);
+            //var methodVariableDefinition = AddVariableDefinition(method, "__fody$method", methodBaseTypeRef);
+            //var attributeVariableDefinition = AddVariableDefinition(method, "__fody$attribute", attribute.AttributeType);
+            //var exceptionVariableDefinition = AddVariableDefinition(method, "__fody$exception", exceptionTypeRef);
+            var draftVariableDefinition = AddVariableDefinition(method, "__fody$draft", type);
             var parametersVariableDefinition = AddVariableDefinition(method, "__fody$parameters", parametersArrayTypeRef);
 
             VariableDefinition retvalVariableDefinition = null;
@@ -34,24 +35,32 @@ namespace MethodDecorator.Fody {
 
             var initMethodRef = this._referenceFinder.GetOptionalMethodReference(attribute.AttributeType, md => md.Name == "Init");
 
-            var onEntryMethodRef = this._referenceFinder.GetMethodReference(attribute.AttributeType, md => md.Name == "OnEntry");
-            var onExitMethodRef = this._referenceFinder.GetMethodReference(attribute.AttributeType, md => md.Name == "OnExit");
-            var onExceptionMethodRef = this._referenceFinder.GetMethodReference(attribute.AttributeType, md => md.Name == "OnException");
+            //var onEntryMethodRef = this._referenceFinder.GetMethodReference(attribute.AttributeType, md => md.Name == "OnEntry");
+            //var onExitMethodRef = this._referenceFinder.GetMethodReference(attribute.AttributeType, md => md.Name == "OnExit");
+            //var onExceptionMethodRef = this._referenceFinder.GetMethodReference(attribute.AttributeType, md => md.Name == "OnException");
+
+            var needsApprovalMethodRef = this._referenceFinder.GetMethodReference(type, x => x.Name == "NeedsApproval");
+            var isDraftMethodRef = this._referenceFinder.GetMethodReference(type, x => x.Name == "IsDraft");
+            var getOrCreateDraftMethodRef = this._referenceFinder.GetMethodReference(type, x => x.Name == "GetOrCreateDraft");
+            var changeRequestedMethodRef = this._referenceFinder.GetMethodReference(type, x => x.Name == "ChangeRequested");
 
             var taskContinuationMethodRef = this._referenceFinder.GetOptionalMethodReference(attribute.AttributeType, md => md.Name == "OnTaskContinuation");
 
             var processor = method.Body.GetILProcessor();
             var methodBodyFirstInstruction = method.Body.Instructions.First();
+            var methodBodyLastInstruction = method.Body.Instructions.Last();
+            if (methodBodyLastInstruction.Previous.OpCode == OpCodes.Nop)
+                methodBodyLastInstruction = methodBodyLastInstruction.Previous;
 
             if (method.IsConstructor && method.Body.Instructions.Any(i => i.OpCode == OpCodes.Call)) {
                 methodBodyFirstInstruction = method.Body.Instructions.First(i => i.OpCode == OpCodes.Call).Next;
             }
-
-            var initAttributeVariable = this.GetAttributeInstanceInstructions(processor,
-                                                                         attribute,
-                                                                         method,
-                                                                         attributeVariableDefinition,
-                                                                         methodVariableDefinition);
+            
+            //var initAttributeVariable = this.GetAttributeInstanceInstructions(processor,
+            //                                                             attribute,
+            //                                                             method,
+            //                                                             attributeVariableDefinition,
+            //                                                             methodVariableDefinition);
 
             IEnumerable<Instruction> callInitInstructions = null,
                                      createParametersArrayInstructions = null;
@@ -63,63 +72,87 @@ namespace MethodDecorator.Fody {
                     parameterTypeRef,
                     parametersVariableDefinition);
 
-                callInitInstructions = GetCallInitInstructions(
-                    processor,
-                    type,
-                    method,
-                    attributeVariableDefinition,
-                    methodVariableDefinition,
-                    parametersVariableDefinition,
-                    initMethodRef);
+                //callInitInstructions = GetCallInitInstructions(
+                //    processor,
+                //    type,
+                //    method,
+                //    attributeVariableDefinition,
+                //    methodVariableDefinition,
+                //    parametersVariableDefinition,
+                //    initMethodRef);
             }
 
-            var callOnEntryInstructions = GetCallOnEntryInstructions(processor, attributeVariableDefinition, onEntryMethodRef);
+            //var callOnEntryInstructions = GetCallOnEntryInstructions(processor, attributeVariableDefinition, onEntryMethodRef);
             var saveRetvalInstructions = GetSaveRetvalInstructions(processor, retvalVariableDefinition);
-            var callOnExitInstructions = GetCallOnExitInstructions(processor, attributeVariableDefinition, onExitMethodRef);
+            //var callOnExitInstructions = GetCallOnExitInstructions(processor, attributeVariableDefinition, onExitMethodRef);
             var methodBodyReturnInstructions = GetMethodBodyReturnInstructions(processor, retvalVariableDefinition);
             var methodBodyReturnInstruction = methodBodyReturnInstructions.First();
             var tryCatchLeaveInstructions = GetTryCatchLeaveInstructions(processor, methodBodyReturnInstruction);
-            var catchHandlerInstructions = GetCatchHandlerInstructions(processor, attributeVariableDefinition, exceptionVariableDefinition, onExceptionMethodRef);
+            //var catchHandlerInstructions = GetCatchHandlerInstructions(processor, attributeVariableDefinition, exceptionVariableDefinition, onExceptionMethodRef);
 
-            
+           // System.IO.File.WriteAllText("C:\\TEMP\\out.txt", string.Join("\r\n", processor.Body.Instructions.Select(x => x.ToString()).ToArray()));
 
-            ReplaceRetInstructions(processor, saveRetvalInstructions.Concat(callOnExitInstructions).First());
+            //ReplaceRetInstructions(processor, saveRetvalInstructions.Concat(callOnExitInstructions).First());
 
-            processor.InsertBefore(methodBodyFirstInstruction, initAttributeVariable);
+            //processor.InsertBefore(methodBodyFirstInstruction, initAttributeVariable);
 
-            if (null != initMethodRef) {
+            if (null != initMethodRef)
+            {
                 processor.InsertBefore(methodBodyFirstInstruction, createParametersArrayInstructions);
-                processor.InsertBefore(methodBodyFirstInstruction, callInitInstructions);
+                //processor.InsertBefore(methodBodyFirstInstruction, callInitInstructions);
             }
 
-            processor.InsertBefore(methodBodyFirstInstruction, callOnEntryInstructions);
+            var na = type.Methods.FirstOrDefault(x => x.Name == "NeedsApproval");
+            bool na_virt = na == null ? false : na.IsVirtual;
 
-            processor.InsertAfter(method.Body.Instructions.Last(), methodBodyReturnInstructions);
+            var id = type.Methods.FirstOrDefault(x => x.Name == "IsDraft");
+            bool id_virt = na == null ? false : na.IsVirtual;
 
-            processor.InsertBefore(methodBodyReturnInstruction, saveRetvalInstructions);
+            processor.InsertBefore(methodBodyFirstInstruction, GetNeedsApprovalAndIsDraft(processor, needsApprovalMethodRef, na_virt, isDraftMethodRef, id_virt, methodBodyFirstInstruction));
 
-            if (null != taskContinuationMethodRef) {
-                var taskContinuationInstructions = GetTaskContinuationInstructions(
-                    processor,
-                    retvalVariableDefinition,
-                    attributeVariableDefinition,
-                    taskContinuationMethodRef);
+            var gocd = type.Methods.FirstOrDefault(x => x.Name == "GetOrCreateDraft");
+            bool gocd_virt = na == null ? false : na.IsVirtual;
 
-                processor.InsertBefore(methodBodyReturnInstruction, taskContinuationInstructions);
-            }
+            processor.InsertBefore(methodBodyFirstInstruction, GetCreateDraftInstructions(processor, getOrCreateDraftMethodRef, gocd_virt, draftVariableDefinition, type));
 
-            processor.InsertBefore(methodBodyReturnInstruction, callOnExitInstructions);
-            processor.InsertBefore(methodBodyReturnInstruction, tryCatchLeaveInstructions);
+            processor.InsertBefore(methodBodyFirstInstruction, GetCallDraftMethodInstructions(processor, parametersVariableDefinition, draftVariableDefinition, method));
 
-            processor.InsertBefore(methodBodyReturnInstruction, catchHandlerInstructions);
+            var ac = type.Methods.FirstOrDefault(x => x.Name == "ChangeRequested");
+            bool ac_virt = na == null ? false : na.IsVirtual;
 
-            method.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch) {
-                CatchType = exceptionTypeRef,
-                TryStart = methodBodyFirstInstruction,
-                TryEnd = tryCatchLeaveInstructions.Last().Next,
-                HandlerStart = catchHandlerInstructions.First(),
-                HandlerEnd = catchHandlerInstructions.Last().Next
-            });
+            processor.InsertBefore(methodBodyFirstInstruction, GetApplyChangeInstructions(processor, changeRequestedMethodRef, ac_virt));
+
+            processor.InsertBefore(methodBodyFirstInstruction, processor.Create(OpCodes.Br_S, methodBodyLastInstruction));
+
+            //processor.InsertBefore(methodBodyFirstInstruction, callOnEntryInstructions);
+
+            //processor.InsertAfter(method.Body.Instructions.Last(), methodBodyReturnInstructions);
+
+            //processor.InsertBefore(methodBodyReturnInstruction, saveRetvalInstructions);
+
+            //if (null != taskContinuationMethodRef)
+            //{
+            //    var taskContinuationInstructions = GetTaskContinuationInstructions(
+            //        processor,
+            //        retvalVariableDefinition,
+            //        attributeVariableDefinition,
+            //        taskContinuationMethodRef);
+
+            //    processor.InsertBefore(methodBodyReturnInstruction, taskContinuationInstructions);
+            //}
+
+            //processor.InsertBefore(methodBodyReturnInstruction, callOnExitInstructions);
+            //processor.InsertBefore(methodBodyReturnInstruction, tryCatchLeaveInstructions);
+
+            //processor.InsertBefore(methodBodyReturnInstruction, catchHandlerInstructions);
+
+            //method.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch) {
+            //    CatchType = exceptionTypeRef,
+            //    TryStart = methodBodyFirstInstruction,
+            //    TryEnd = tryCatchLeaveInstructions.Last().Next,
+            //    HandlerStart = catchHandlerInstructions.First(),
+            //    HandlerEnd = catchHandlerInstructions.Last().Next
+            //});
         }
 
         private static VariableDefinition AddVariableDefinition(MethodDefinition method, string variableName, TypeReference variableType) {
@@ -271,6 +304,62 @@ namespace MethodDecorator.Fody {
             if (retvalVariableDefinition != null)
                 instructions.Add(processor.Create(OpCodes.Ldloc_S, retvalVariableDefinition));
             instructions.Add(processor.Create(OpCodes.Ret));
+            return instructions;
+        }
+
+        private static IList<Instruction> GetNeedsApprovalAndIsDraft(ILProcessor processor, MethodReference needApprovalRef, bool needsApprovalVirt,  MethodReference isDraftRef, bool isDraftVirt, Instruction elseFirst)
+        {
+            var instructions = new List<Instruction>();
+            instructions.Add(processor.Create(OpCodes.Ldarg_0));
+            instructions.Add(processor.Create(OpCodes.Ldarg_1));
+            instructions.Add(processor.Create(needsApprovalVirt ? OpCodes.Callvirt : OpCodes.Call, needApprovalRef));
+            var ldci4 = processor.Create(OpCodes.Ldc_I4_0); 
+            var stloc0 = processor.Create(OpCodes.Stloc_0);
+            instructions.Add(processor.Create(OpCodes.Brfalse_S, ldci4));
+            instructions.Add(processor.Create(OpCodes.Ldarg_0));
+            instructions.Add(processor.Create(isDraftVirt ? OpCodes.Callvirt : OpCodes.Call, isDraftRef));
+            instructions.Add(ldci4);
+            instructions.Add(processor.Create(OpCodes.Ceq));
+            instructions.Add(processor.Create(OpCodes.Br_S, stloc0));
+            instructions.Add(ldci4);
+            instructions.Add(stloc0);
+            instructions.Add(processor.Create(OpCodes.Ldloc_0));
+            instructions.Add(processor.Create(OpCodes.Brfalse_S, elseFirst));
+            return instructions;
+        }
+
+        private static IList<Instruction> GetCreateDraftInstructions(ILProcessor processor, MethodReference getOrCreateDraft, bool getOrCreateDraftVirt, VariableDefinition draftVar, TypeDefinition type)
+        {
+            var instructions = new List<Instruction>();
+            instructions.Add(processor.Create(OpCodes.Ldarg_0));
+            instructions.Add(processor.Create(getOrCreateDraftVirt ? OpCodes.Callvirt : OpCodes.Call, getOrCreateDraft));
+            instructions.Add(processor.Create(OpCodes.Castclass, type));
+            instructions.Add(processor.Create(OpCodes.Stloc, draftVar));
+            return instructions;
+        }
+
+        private static IList<Instruction> GetCallDraftMethodInstructions(ILProcessor processor, VariableDefinition paramz, VariableDefinition draftVar, MethodDefinition method)
+        {
+            var instructions = new List<Instruction>();
+            instructions.Add(processor.Create(OpCodes.Ldloc, draftVar));
+            int i = 0;
+            foreach (var p in method.Parameters)
+            {
+                instructions.Add(processor.Create(OpCodes.Ldloc, paramz));
+                instructions.Add(processor.Create(OpCodes.Ldc_I4, i++));
+                instructions.Add(processor.Create(OpCodes.Ldelem_Ref));
+            }
+
+            instructions.Add(processor.Create(method.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, method));
+            return instructions;
+        }
+
+        private static IList<Instruction> GetApplyChangeInstructions(ILProcessor processor, MethodReference applyChange, bool applyChangeVirt)
+        {
+            var instructions = new List<Instruction>();
+            instructions.Add(processor.Create(OpCodes.Ldarg_0));
+            instructions.Add(processor.Create(OpCodes.Ldarg_1));
+            instructions.Add(processor.Create(applyChangeVirt ? OpCodes.Callvirt : OpCodes.Call, applyChange));
             return instructions;
         }
 
