@@ -33,4 +33,5 @@ namespace SimpleTest
 
 		public virtual void OnTaskContinuation(Task task) { }
 	}
+
 }
